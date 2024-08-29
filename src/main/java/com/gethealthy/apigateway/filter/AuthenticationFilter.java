@@ -38,6 +38,14 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
     @Override
     public GatewayFilter apply(Config config) {
         return (exchange, chain) -> {
+            // Extract the request path
+            String requestPath = exchange.getRequest().getURI().getPath();
+
+            // Skip authentication for /login and /signup endpoints
+            if (requestPath.equals("/authentication-service/api/v1/auth/login") || requestPath.equals("/authentication-service/api/v1/auth/signup")) {
+                return chain.filter(exchange);  // Proceed without authentication
+            }
+
             // Check if the Authorization header is present
             if (!exchange.getRequest().getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
                 return this.onError(exchange, "No Authorization header");
@@ -52,12 +60,14 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
             // Make an API call to authenticate the user
             return webClientBuilder.build()
                     .post()
-                    .uri("http://authentication-service/api/v1/auth/authenticate-user") // Service URL registered in Eureka
+                    .uri("http://localhost:8082/api/v1/auth/authenticate-user") // Consider externalizing the URL
                     .header(HttpHeaders.AUTHORIZATION, authHeader)
                     .retrieve()
-                    .bodyToMono(Boolean.class)
-                    .flatMap(isAuthenticated -> {
-                        if (Boolean.TRUE.equals(isAuthenticated)) {
+                    .bodyToMono(String.class)  // Change to String to match "truetrue" and "falsefalse" (This is because the authenticate-user endpoint processes the request twice. still to figure out why)
+                    .flatMap(response -> {
+                        System.out.println("Received response from authenticate-user endpoint: " + response);
+
+                        if ("truetrue".equals(response)) {
                             // Continue with the request if authenticated
                             return chain.filter(exchange);
                         } else {
@@ -68,6 +78,9 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                     .then();
         };
     }
+
+
+
 
     /**
      * Handles errors by setting the response status to Unauthorized.
