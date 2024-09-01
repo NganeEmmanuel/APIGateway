@@ -1,4 +1,4 @@
-package com.gethealthy.apigateway.filter;
+package com.gethealthy.apigateway.security.filter;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
@@ -63,11 +63,11 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                     .uri("http://localhost:8082/api/v1/auth/authenticate-user") // Consider externalizing the URL
                     .header(HttpHeaders.AUTHORIZATION, authHeader)
                     .retrieve()
-                    .bodyToMono(String.class)  // Change to String to match "truetrue" and "falsefalse" (This is because the authenticate-user endpoint processes the request twice. still to figure out why)
+                    .bodyToMono(Boolean.class)  // Change to String to match "truetrue" and "falsefalse" (This is because the authenticate-user endpoint processes the request twice. still to figure out why)
                     .flatMap(response -> {
                         System.out.println("Received response from authenticate-user endpoint: " + response);
 
-                        if ("truetrue".equals(response)) {
+                        if (response.equals(Boolean.TRUE)) {
                             // Continue with the request if authenticated
                             return chain.filter(exchange);
                         } else {
