@@ -1,8 +1,10 @@
 package com.gethealthy.apigateway.security.filter;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
+import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpResponse;
@@ -21,6 +23,15 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
 
     @Autowired
     private WebClient.Builder webClientBuilder;
+
+    /**
+     * LoadBalanced WebClient.Builder Bean to support Eureka service discovery.
+     */
+    @Bean
+    @LoadBalanced
+    public WebClient.Builder loadBalancedWebClientBuilder() {
+        return WebClient.builder();
+    }
 
     /**
      * Constructor for AuthenticationFilter.
@@ -42,7 +53,11 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
             String requestPath = exchange.getRequest().getURI().getPath();
 
             // Skip authentication for /login and /signup endpoints
-            if (requestPath.equals("/authentication-service/api/v1/auth/login") || requestPath.equals("/authentication-service/api/v1/auth/signup")) {
+            if (requestPath.equals("/authentication-service/api/v1/auth/login")
+                    || requestPath.equals("/authentication-service/api/v1/auth/signup")
+                    || requestPath.equals("/api/v1/auth/authenticate-user")
+                    || requestPath.equals("/authentication-service/api/v1/auth/authenticate-user")
+            ) {
                 return chain.filter(exchange);  // Proceed without authentication
             }
 
@@ -57,13 +72,13 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                 return this.onError(exchange, "Invalid Authorization header");
             }
 
-            // Make an API call to authenticate the user
+            // Make an API call to authenticate the user using Eureka's service discovery (load-balanced)
             return webClientBuilder.build()
                     .post()
-                    .uri("http://localhost:8082/api/v1/auth/authenticate-user") // Consider externalizing the URL
+                    .uri("http://localhost:8765/authentication-service/api/v1/auth/authenticate-user") // Using Eureka service discovery
                     .header(HttpHeaders.AUTHORIZATION, authHeader)
                     .retrieve()
-                    .bodyToMono(Boolean.class)  // Change to String to match "truetrue" and "falsefalse" (This is because the authenticate-user endpoint processes the request twice. still to figure out why)
+                    .bodyToMono(Boolean.class)
                     .flatMap(response -> {
                         System.out.println("Received response from authenticate-user endpoint: " + response);
 
@@ -78,9 +93,6 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                     .then();
         };
     }
-
-
-
 
     /**
      * Handles errors by setting the response status to Unauthorized.
